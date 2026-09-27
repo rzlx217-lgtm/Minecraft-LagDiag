@@ -1,0 +1,44 @@
+name: Build APK from source ZIP
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Extract Android source
+        run: unzip -oq MinecraftLagDiag-source.zip -d app-src
+      - name: Prepare Android SDK
+        run: |
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+          printf 'sdk.dir=%s\n' "$ANDROID_HOME" > app-src/local.properties
+      - name: Test, lint, and build
+        run: gradle --project-dir app-src --no-daemon :app:testDebugUnitTest :app:lintDebug :app:assembleDebug
+      - name: Upload installable debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: MinecraftLagDiag-debug
+          path: app-src/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+      - name: Upload test and lint results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-results
+          path: |
+            app-src/app/build/reports/tests/
+            app-src/app/build/reports/lint-results-debug*
+          if-no-files-found: ignore
